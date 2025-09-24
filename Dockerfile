@@ -1,10 +1,11 @@
-FROM astral/uv:python3.12-bookworm-slim
-WORKDIR /web
+FROM python:3.12-slim-bookworm
+WORKDIR /celery_worker
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen
-COPY app ./app
+COPY requirements.txt .
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    && pip install --no-cache-dir -r requirements.txt \
+    && rm -rf /var/lib/apt/lists/*
 
-# same image, but different command for the worker
-CMD [uv, run, celery, -A, app.app.celery_app, worker, -l, info]
+COPY src ./src
+CMD ["python", "src/celery_app.py"]
 
