@@ -3,11 +3,12 @@ import os
 from sqlalchemy import engine, create_engine
 from sqlalchemy.orm import Session
 from pathlib import Path
+from db.db_methods import Temperature, User
 
-SOCK    = os.getenv("SOCK")
-DB_PATH = os.getenv("DB_PATH")
+SOCK   = os.getenv("SOCK")
+DB_URL = os.getenv("DB_URL")
 
-print(f"CURRENT PATH {Path.cwd()}")
+print(f"CURRENT URL {Path.cwd()}")
 
 # ===================================================
 #                CELERY TASK QUEUE
@@ -22,18 +23,17 @@ celery_app = Celery(
 
 @celery_app.task(name="insert_record")
 def insert_record(sensor_id, timestamp, temperature_c):
-    print("CELERY ADDING TO POSTGRES", sensor_id, timestamp, temperature_c)
-    # engine = create_engine(f"sqlite:///..{DB_PATH}")
-    # reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
-    # with Session(engine) as session:
-    #     session.add(reading)
-    #     session.commit()
+    engine = create_engine(DB_URL, echo=True)
+    reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
+    with Session(engine) as session:
+        session.add(reading)
+        session.commit()
 
 
 # def send_emails(temperature):
 #     # TODO
 #     # pull from the user list
-#     engine = create_engine(f"sqlite:///{DB_PATH}")
+#     engine = create_engine(f"sqlite:///{DB_URL}")
 #     with Session(engine) as session:
 #         users = session.execute(
 #                 select(User).where(User.email_addr)
