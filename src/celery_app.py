@@ -2,7 +2,6 @@ from celery import Celery
 import os
 from sqlalchemy import engine, create_engine
 from sqlalchemy.orm import Session
-from src.database.db_orm import Temperature
 from pathlib import Path
 
 SOCK    = os.getenv("SOCK")
@@ -23,11 +22,12 @@ celery_app = Celery(
 
 @celery_app.task(name="insert_record")
 def insert_record(sensor_id, timestamp, temperature_c):
-    engine = create_engine(f"sqlite:///..{DB_PATH}")
-    reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
-    with Session(engine) as session:
-        session.add(reading)
-        session.commit()
+    print("CELERY ADDING TO POSTGRES", sensor_id, timestamp, temperature_c)
+    # engine = create_engine(f"sqlite:///..{DB_PATH}")
+    # reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
+    # with Session(engine) as session:
+    #     session.add(reading)
+    #     session.commit()
 
 
 # def send_emails(temperature):
