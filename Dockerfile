@@ -10,6 +10,7 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY ../L1-sqlachemy-database ./src
 COPY src ./src
 
 RUN groupadd -g 1000 celerygroup \
