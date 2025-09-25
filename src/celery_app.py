@@ -1,75 +1,78 @@
 from celery import Celery
-import os
+from celery.signals import worker_process_init
 from sqlalchemy import engine, create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from pathlib import Path
+import os
+import redis
+
 from .db_orm import Temperature, User, Base
 
 SOCK   = os.getenv("SOCK")
 DB_URL = os.getenv("DB_URL")
 
-# ensure that tables are created 
 engine = create_engine(DB_URL, echo=True)
 Base.metadata.create_all(engine)
 
 # ===================================================
+#                REDIS STREAM + CACHE
+# ===================================================
+red = redis.Redis(
+    unix_socket_path=SOCK,
+    decode_responses=True
+)
+
+# ===================================================
 #                CELERY TASK QUEUE
 # ===================================================
+# building one engine (db conn) per worker. this is running with a pi4 
+# so this entire setup is definitely overkill... it is possible that 
+# we stick with the http sending of data from our temperature sensor 
+# and use a more capable machine to reap the benefits of celery, task queues,
+# database storage, and quicker analytics.
+#
+# the purpose of the initializer setup (and more importantly using sessionmaker)
+# is to reduce the tcp handshaking required for making an engine connection. 
+# The sessionmaker is a factory bound to the engine connection. This allows each task
+# to simply borrow connections from the pool, perfom the insertion, and return the 
+# connection to the pool
 celery_app = Celery(
     main=__name__,
     broker=f"redis+socket://{SOCK}",
 )
 
-# ===================================================
-#                REDIS STREAM 
-# ===================================================
-# red = redis.Redis(
-#     unix_socket_path=SOCK,
-#     decode_responses=True
-# )
+_engine = None
+_Session = None
 
-# # i want my main thread to be able to listen to the stream data every 1 second upload to the postgres
-# while True:
-#     data = red.xrevrange(name="readings", count=300)
-#     df = (process_stream(data))
-#     red.set("current_df", df.to_json())
-#     first_row = df.iloc[[-1]]
-
-#     stamp = int(first_row.iloc[0]["date"])
-#     t1 = first_row.iloc[0]["Sensor 1"]
-#     t2 = first_row.iloc[0]["Sensor 2"]
-    
-#     insert_record(sensor_id=1, timestamp=stamp, temperature_c=t1)
-#     insert_record(sensor_id=2, timestamp=stamp, temperature_c=t2)
+@worker_process_init.connect
+def initialize_new_worker(**kwargs):
+    global _engine, _Session
+    _engine = create_engine(DB_URL, echo=False)
+    # Base.metadata.create_all(_engine)                             # only run if tables arent already created
+    _Session = sessionmaker(bind=_engine, expire_on_commit=False)
 
 @celery_app.task(name="insert_record")
 def insert_record(sensor_id, timestamp, temperature_c):
-    reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
-    print("READING", reading)
-    engine = create_engine(DB_URL, echo=True)
-    print("ENGINE IS CREATED")
-    reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
-    with Session(engine) as session:
+    session = _Session()
+    try:
+        print("")
+        print("ADDING RECORD")
+        reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
+        print("reading:", reading)
         session.add(reading)
+        print("ADDED")
         session.commit()
+    finally:
+        session.close()
 
-# def send_emails(temperature):
-#     # TODO
-#     # pull from the user list
-#     engine = create_engine(f"sqlite:///{DB_URL}")
-#     with Session(engine) as session:
-#         users = session.execute(
-#                 select(User).where(User.email_addr)
-#             )
-#         
-#         # parse the Result as a dictionary
-#         for user in users.to_dict():
-#             message = f"Recorded 4 consecutive {temperature} readings"
-#             email_addr = user.get("email_addr")
-#             send_email(email_addr, message)
-
-
+# TODO: move the caching code for sending emails to the web server. this makes more sense
+# as the cache can be read when triggered. this way there is only 1 worker per email.
 # @celery_app.task()
 # def send_email(addr: str, message: str):
-#     # todo
-#     print("sending email")
+#     if not red.exists("emails"):
+#         emails = get_mailing_list()
+#         red.set("emails", json.dumps(emails))
+#     else:
+#         emails = json.loads(red.get("emails"))
+
+#     print("sending emails now...")
