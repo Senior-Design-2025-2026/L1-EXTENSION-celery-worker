@@ -40,6 +40,7 @@ DB_URL = os.getenv("DB_URL")
 #                POSTGRES CONNECTION
 # ===================================================
 engine = create_engine(DB_URL, echo=True)
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 
 # ===================================================
@@ -71,7 +72,6 @@ _Session = None
 def initialize_new_worker(**kwargs):    
     global _engine, _Session                                    
     _engine = create_engine(DB_URL, echo=False)                     # NOTICE
-    # Base.metadata.create_all(_engine)                             # @team: keep commented; only run this command if tables arent already created or the db gets nuked
     _Session = sessionmaker(bind=_engine, expire_on_commit=False)
 
 @worker_process_shutdown.connect
@@ -95,10 +95,11 @@ def insert_record(sensor_id, timestamp, temperature_c):
         session.close()
 
 @celery_app.task(name="add_user")
-def add_user(name, phone_num, email_addr):
+def add_user(name, email_addr, min_thresh_c, max_thresh_c):
     session = _Session()
     try:
-        user = User(name=name, phone_num=phone_num, email_addr=email_addr)
+        user = User(name=name, email_addr=email_addr, min_thresh_c=min_thresh_c, max_thresh_c=max_thresh_c)
+        print("USER ADDING ", user)
         session.add(user)
         session.commit()
     except Exception as e:
