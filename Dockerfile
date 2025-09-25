@@ -17,4 +17,6 @@ RUN groupadd -g 1000 celerygroup \
 
 USER celeryuser
 
+# this defaults to --concurrency=N as default (ex my mac has 8 cores -> 8 workers, pi has 4... max of 4 workers, but also running 4 containers. this could be f'd)
 CMD ["celery", "-A", "src.celery_app.celery_app", "worker", "--loglevel=info"]
+

@@ -5,22 +5,42 @@ from sqlalchemy.orm import Session, sessionmaker
 from pathlib import Path
 import os
 import redis
+import smtplib
 
 from .db_orm import Temperature, User, Base
+
+# ===================================================
+#                EMAIL CONFIGURATION
+# ===================================================
+# this code was modified from Tejashree Salvi's Medium
+# article: "Automating Emails with Python: A Comprehensive Guide"
+# 
+# her article was pretty comprehensive... not sure how 
+# much more innovating can be done on top of smtplib so 
+# cut and pasting and modifying for our needs.
+SMTP_SERVER = 'smtp.gmail.com'
+SMTP_PORT = 587
+SMTP_USERNAME = os.getenv("EMAIL_USER")
+SMTP_PASSWORD = os.getenv("EMAIL_PASS")                   # DO NOT EXPOSE TO GITHUB!!!
+SMTP_SENDER = SMTP_USERNAME
+
+print("")
+print("")
+print("")
+print("EMAIL_USER", SMTP_USERNAME)
+print("EMAIL_PASS", SMTP_PASSWORD)
+print("")
+print("")
+print("")
 
 SOCK   = os.getenv("SOCK")
 DB_URL = os.getenv("DB_URL")
 
+# ===================================================
+#                POSTGRES CONNECTION
+# ===================================================
 engine = create_engine(DB_URL, echo=True)
 Base.metadata.create_all(engine)
-
-# ===================================================
-#                REDIS STREAM + CACHE
-# ===================================================
-red = redis.Redis(
-    unix_socket_path=SOCK,
-    decode_responses=True
-)
 
 # ===================================================
 #                CELERY TASK QUEUE
@@ -44,13 +64,23 @@ celery_app = Celery(
 _engine = None
 _Session = None
 
+# ===================================================
+#             CELERY WORKER MANAGEMENT
+# ===================================================
 @worker_process_init.connect
 def initialize_new_worker(**kwargs):    
     global _engine, _Session                                    
-    _engine = create_engine(DB_URL, echo=False)
-    # Base.metadata.create_all(_engine)                             # @team: keep commented; only run if tables arent already created or the db gets nuked
+    _engine = create_engine(DB_URL, echo=False)                     # NOTICE
+    # Base.metadata.create_all(_engine)                             # @team: keep commented; only run this command if tables arent already created or the db gets nuked
     _Session = sessionmaker(bind=_engine, expire_on_commit=False)
 
+@worker_process_shutdown.connect
+def safely_destroy_worker(**_):
+    _engine.dispose()
+
+# ===================================================
+#             CELERY ASYNC TASKS ENDPOINTS
+# ===================================================
 @celery_app.task(name="insert_record")
 def insert_record(sensor_id, timestamp, temperature_c):
     session = _Session()
@@ -58,22 +88,34 @@ def insert_record(sensor_id, timestamp, temperature_c):
         reading = Temperature(sensor_id=sensor_id, timestamp=timestamp, temperature_c=temperature_c)
         session.add(reading)
         session.commit()
-    except:
+    except Exception as e:
         session.rollback()
         raise
     finally:
         session.close()
 
-@celery_app.task()
-def send_email(addr: str, message: str):
-    # if not red.exists("emails"):
-    #     emails = get_mailing_list()
-    #     red.set("emails", json.dumps(emails))
-    # else:
-    #     emails = json.loads(red.get("emails"))
+@celery_app.task(name="add_user")
+def add_user(name, phone_num, email_addr):
+    session = _Session()
+    try:
+        user = User(name=name, phone_num=phone_num, email_addr=email_addr)
+        session.add(user)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
-    print("sending emails now...")
+@celery_app.task(name="send_email", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
+def send_email(email_addr: str, message: str):
+    print("")
+    print("Sending email")
+    print("from:", SMTP_USERNAME)
+    print("to:", email_addr)
+    print("message:", message)
 
-@worker_process_shutdown.connect
-def safely_destroy_worker(**_):
-    _engine.dispose()
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
+        smtp.starttls()
+        smtp.login(user=SMTP_USERNAME, password=SMTP_PASSWORD)
+        smtp.sendmail(from_addr=SMTP_SENDER, to_addrs=email_addr, msg=message)
