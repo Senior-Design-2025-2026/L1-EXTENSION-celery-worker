@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip install --no-cache-dir -r requirements.txt \
     && rm -rf /var/lib/apt/lists/*
 
-COPY L1-sqlalchemy-orm ./src/db
-COPY L1-celery-worker/src ./src
+COPY L1-sqlalchemy-orm/db_orm.py ./src/
+COPY L1-celery-worker/src ./src/
 
 RUN groupadd -g 1000 celerygroup \
     && useradd -m -u 1000 -g 1000 celeryuser \
