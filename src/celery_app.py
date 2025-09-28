@@ -39,8 +39,7 @@ DB_URL = os.getenv("DB_URL")
 # ===================================================
 #                POSTGRES CONNECTION
 # ===================================================
-engine = create_engine(DB_URL, echo=True)
-Base.metadata.drop_all(engine)
+engine = create_engine(DB_URL)
 Base.metadata.create_all(engine)
 
 # ===================================================
