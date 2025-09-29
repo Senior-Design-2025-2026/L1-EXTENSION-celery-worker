@@ -7,6 +7,9 @@ import os
 import redis
 import smtplib
 
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 from .db_orm import Temperature, User, Base
 
 # ===================================================
@@ -18,20 +21,11 @@ from .db_orm import Temperature, User, Base
 # her article was pretty comprehensive... not sure how 
 # much more innovating can be done on top of smtplib so 
 # cut and pasting and modifying for our needs.
-SMTP_SERVER = 'smtp.gmail.com'
-SMTP_PORT = 587
-SMTP_USERNAME = os.getenv("EMAIL_USER")
-SMTP_PASSWORD = os.getenv("EMAIL_PASS")                   # DO NOT EXPOSE TO GITHUB!!!
+SMTP_SERVER = 'ns-mx.uiowa.edu'
+SMTP_PORT = 25
+SMTP_USERNAME = 'lab1_seniordesign_team3@gmail.com'
+# SMTP_PASSWORD = os.getenv("EMAIL_PASS")                   # DO NOT EXPOSE TO GITHUB!!!
 SMTP_SENDER = SMTP_USERNAME
-
-print("")
-print("")
-print("")
-print("EMAIL_USER", SMTP_USERNAME)
-print("EMAIL_PASS", SMTP_PASSWORD)
-print("")
-print("")
-print("")
 
 SOCK   = os.getenv("SOCK")
 DB_URL = os.getenv("DB_URL")
@@ -115,7 +109,10 @@ def send_email(email_addr: str, message: str):
     print("to:", email_addr)
     print("message:", message)
 
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
-        smtp.starttls()
-        smtp.login(user=SMTP_USERNAME, password=SMTP_PASSWORD)
-        smtp.sendmail(from_addr=SMTP_SENDER, to_addrs=email_addr, msg=message)
+    msg = MIMEText(message)
+    msg["Subject"] = "Critical Temperature Reading!"
+    msg["From"]    = SMTP_USERNAME
+    msg["To"]      = email_addr
+
+    with smtplib.SMTP("ns-mx.uiowa.edu", 25) as server:
+        server.sendmail(SMTP_USERNAME, [email_addr], msg.as_string())
