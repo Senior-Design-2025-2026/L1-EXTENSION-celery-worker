@@ -6,6 +6,8 @@ from pathlib import Path
 import os
 import redis
 import smtplib
+import json
+import pandas as pd
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -101,18 +103,83 @@ def add_user(name, email_addr, min_thresh_c, max_thresh_c):
     finally:
         session.close()
 
-@celery_app.task(name="send_email", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
-def send_email(email_addr: str, message: str):
-    print("")
-    print("Sending email")
-    print("from:", SMTP_USERNAME)
-    print("to:", email_addr)
-    print("message:", message)
+@celery_app.task(name="email_min_thresh", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
+def email_min_thresh(sensor_id, df, last_three_list):
+    stmt = f"Cold Advisory: Sensor {sensor_id} read three consecutive readings over"
 
-    msg = MIMEText(message)
-    msg["Subject"] = "Critical Temperature Reading!"
-    msg["From"]    = SMTP_USERNAME
-    msg["To"]      = email_addr
+    mailing_list = get_mailing_list_min_thresh(df, last_three_list)
+    print("SENDING MIN THRESH")
+    for _, row in mailing_list.iterrows():
+        name = row["name"]
+        email_addr = row["email_addr"]
+        min_thresh = row["min_thresh_c"]
+        
+        print("name", name)
+        print("email", email_addr)
+        print("min_thresh", min_thresh)
 
-    with smtplib.SMTP("ns-mx.uiowa.edu", 25) as server:
-        server.sendmail(SMTP_USERNAME, [email_addr], msg.as_string())
+        message = (
+            f"Attention {name}:\n"
+            f"{stmt} {float(min_thresh):.2f} °C\n\n"
+            f"Readings: {last_three_list}"
+        )
+        msg = MIMEText(message)
+        msg["Subject"] = "ECE Senior Design Lab 1 - Critical Temperature Reading!"
+        msg["From"] = SMTP_USERNAME
+        msg["To"] = email_addr
+        print("SENT!")
+
+        with smtplib.SMTP("ns-mx.uiowa.edu", 25) as server:
+            server.sendmail(SMTP_USERNAME, [email_addr], msg.as_string())
+
+@celery_app.task(name="email_max_thresh", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
+def email_max_thresh(sensor_id, df, last_three_list):
+    stmt = f"Heat Advisory: Sensor {sensor_id} read three consecutive readings over"
+
+    mailing_list = get_mailing_list_max_thresh(df, last_three_list)
+    print("SENDING MAX THRESH")
+    for _, row in mailing_list.iterrows():
+        name = row["name"]
+        email_addr = row["email_addr"]
+        min_thresh = row["min_thresh_c"]
+
+        print("name", name)
+        print("email", email_addr)
+        print("min_thresh", min_thresh)
+
+        message = (
+            f"Attention {name}:\n"
+            f"{stmt} {float(min_thresh):.2f} °C\n\n"
+            f"Readings: {last_three_list}"
+        )
+        msg = MIMEText(message)
+        msg["Subject"] = "ECE Senior Design Lab 1 - Critical Temperature Reading!"
+        msg["From"] = SMTP_USERNAME
+        msg["To"] = email_addr
+
+        print("SENT!")
+
+        with smtplib.SMTP("ns-mx.uiowa.edu", 25) as server:
+            server.sendmail(SMTP_USERNAME, [email_addr], msg.as_string())
+
+def get_mailing_list_min_thresh(df, temps):
+    temps = [float(temp) for temp in temps]
+
+    df = json.loads(df)
+    users_df = pd.DataFrame.from_dict(df)
+
+    max_min = max(temps)
+    wanted = users_df["min_thresh_c"].astype(float) > max_min
+
+    return users_df.loc[wanted]
+
+def get_mailing_list_max_thresh(df, temps):
+    temps = [float(temp) for temp in temps]
+
+    df = json.loads(df)
+    users_df = pd.DataFrame.from_dict(df)
+
+    min_max = max(temps)
+    wanted = users_df["max_thresh_c"].astype(float) < min_max
+
+    return users_df.loc[wanted]

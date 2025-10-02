@@ -18,5 +18,5 @@ RUN groupadd -g 1000 celerygroup \
 USER celeryuser
 
 # this defaults to --concurrency=N as default (ex my mac has 8 cores -> 8 workers)
-# CMD ["celery", "-A", "src.celery_app.celery_app", "worker", "--loglevel=info"]
-CMD ["celery", "-A", "src.celery_app.celery_app", "worker"]
+CMD ["celery", "-A", "src.celery_app.celery_app", "worker", "--loglevel=info"]
+# CMD ["celery", "-A", "src.celery_app.celery_app", "worker"]
