@@ -95,6 +95,8 @@ def add_user(name, email_addr, min_thresh_c, max_thresh_c):
     try:
         user = User(name=name, email_addr=email_addr, min_thresh_c=min_thresh_c, max_thresh_c=max_thresh_c)
         print("USER ADDING ", user)
+        print("USER ADDING ", user)
+        print("USER ADDING ", user)
         session.add(user)
         session.commit()
     except Exception as e:
@@ -102,6 +104,23 @@ def add_user(name, email_addr, min_thresh_c, max_thresh_c):
         raise
     finally:
         session.close()
+
+@celery_app.task(name="update_user")
+def update_user(name, email_addr, min_thresh_c, max_thresh_c):
+    try:
+        print("UPDATING USER ", name)
+        print("UPDATING USER ", email_addr)
+        with Session(_engine) as session:
+            updated = session.query(User).filter(User.email_addr == email_addr).update(
+                {
+                    "name": name,
+                    "min_thresh_c": min_thresh_c,
+                    "max_thresh_c": max_thresh_c,
+                }
+            )
+            session.commit()
+    except Exception as e:
+        print("ERROR UPDATING", e)
 
 @celery_app.task(name="email_min_thresh", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
 def email_min_thresh(sensor_id, df, last_three_list):
