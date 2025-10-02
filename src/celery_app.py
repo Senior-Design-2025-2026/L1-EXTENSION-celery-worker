@@ -1,6 +1,6 @@
 from celery import Celery
 from celery.signals import worker_process_init, worker_process_shutdown
-from sqlalchemy import engine, create_engine
+from sqlalchemy import engine, create_engine, delete
 from sqlalchemy.orm import Session, sessionmaker
 from pathlib import Path
 import os
@@ -94,12 +94,25 @@ def add_user(name, email_addr, min_thresh_c, max_thresh_c):
     session = _Session()
     try:
         user = User(name=name, email_addr=email_addr, min_thresh_c=min_thresh_c, max_thresh_c=max_thresh_c)
-        print("USER ADDING ", user)
-        print("USER ADDING ", user)
-        print("USER ADDING ", user)
         session.add(user)
         session.commit()
     except Exception as e:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+@celery_app.task(name="delete_user")
+def delete_user(name, email_addr, min_thresh_c, max_thresh_c):
+    session = _Session()
+    try:
+        stmt = (
+            delete(User)
+            .where(User.email_addr == email_addr)
+        )
+        session.execute(stmt)
+        session.commit()
+    except Exception:
         session.rollback()
         raise
     finally:
