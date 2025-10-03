@@ -26,12 +26,11 @@ from .db_orm import Temperature, User, Base
 SMTP_SERVER = 'ns-mx.uiowa.edu'
 SMTP_PORT = 25
 SMTP_USERNAME = 'lab1_seniordesign_team3@gmail.com'
-# SMTP_PASSWORD = os.getenv("EMAIL_PASS")                   # DO NOT EXPOSE TO GITHUB!!!
 SMTP_SENDER = SMTP_USERNAME
 
 SOCK   = os.getenv("SOCK")
 DB_URL = os.getenv("DB_URL")
-
+MODE   = os.getenv("MODE")
 # ===================================================
 #                POSTGRES CONNECTION
 # ===================================================
@@ -137,6 +136,8 @@ def update_user(name, email_addr, min_thresh_c, max_thresh_c):
 
 @celery_app.task(name="email_min_thresh", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
 def email_min_thresh(sensor_id, df, last_three_list):
+    if MODE == "testing":
+        return 
     stmt = f"Cold Advisory: Sensor {sensor_id} read three consecutive readings over"
 
     mailing_list = get_mailing_list_min_thresh(df, last_three_list)
@@ -166,6 +167,8 @@ def email_min_thresh(sensor_id, df, last_three_list):
 
 @celery_app.task(name="email_max_thresh", autoretry_for=(smtplib.SMTPException,), retry_backoff=True, max_retries=5)
 def email_max_thresh(sensor_id, df, last_three_list):
+    if MODE == "testing":
+        return 
     stmt = f"Heat Advisory: Sensor {sensor_id} read three consecutive readings over"
 
     mailing_list = get_mailing_list_max_thresh(df, last_three_list)
