@@ -1,3 +1,5 @@
+[Return to ECE-Senior-Design-Lab-1-EXTENSION -->](https://github.com/Senior-Design-2025-2026/ECE-Senior-Design-Lab-1-EXTENSION/tree/main)
+
 # L1-EXTENSION-celery-worker
 Asynchronous task queue designed to remove load from dashboard web application. Performs tasks with higher overhead that otherwise reduce the dashboards performance.
 
